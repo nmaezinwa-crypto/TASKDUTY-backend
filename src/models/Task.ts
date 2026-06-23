@@ -1,24 +1,17 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
-
-/**
- * Task Interface - Defines the TypeScript shape of a Task document
- */
 export interface ITask extends Document {
-  _id: Types.ObjectId;           // Mongoose document ID
+  _id: Types.ObjectId;
   title: string;
   description: string;
   dueDate: Date;
   category: 'Urgent' | 'Important' | 'Work' | 'Personal' | 'Other';
   completed: boolean;
-  // user?: Types.ObjectId;         // For future JWT authentication (user ownership)
+  user: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/**
- * Mongoose Schema with strong validation
- */
 const taskSchema = new Schema<ITask>(
   {
     title: {
@@ -28,7 +21,6 @@ const taskSchema = new Schema<ITask>(
       minlength: [3, 'Title must be at least 3 characters long'],
       maxlength: [100, 'Title cannot exceed 100 characters'],
     },
-
     description: {
       type: String,
       required: [true, 'Description is required'],
@@ -36,20 +28,18 @@ const taskSchema = new Schema<ITask>(
       minlength: [10, 'Description must be at least 10 characters long'],
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
-
     dueDate: {
       type: Date,
       required: [true, 'Due date is required'],
       validate: {
         validator: function (value: Date): boolean {
           const today = new Date();
-          today.setHours(0, 0, 0, 0); // Start of today (midnight)
+          today.setHours(0, 0, 0, 0);
           return value >= today;
         },
         message: 'Due date cannot be in the past',
       },
     },
-
     category: {
       type: String,
       enum: {
@@ -59,29 +49,23 @@ const taskSchema = new Schema<ITask>(
       default: 'Personal',
       required: true,
     },
-
     completed: {
       type: Boolean,
       default: false,
     },
-
-    // For future authentication - each task will belong to a user
-    // user: {
-    //   type: Schema.Types.ObjectId,
-    //   ref: 'User',
-    //   required: false,
-    // },
-
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'User is required'],
+    },
   },
   {
-    timestamps: true, // Automatically adds createdAt and updatedAt
+    timestamps: true,
   }
 );
 
-// Performance indexes
-taskSchema.index({ user: 1, completed: 1, category: 1 }); // Common query pattern
-taskSchema.index({ dueDate: 1 });                         // Sorting by due date
-
+taskSchema.index({ user: 1, completed: 1, category: 1 });
+taskSchema.index({ dueDate: 1 });
 
 export const Task = mongoose.model<ITask>('Task', taskSchema);
-// export default Task;
+export default Task;

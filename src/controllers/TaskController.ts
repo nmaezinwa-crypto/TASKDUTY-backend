@@ -1,17 +1,15 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Task } from '../models/Task';
 import mongoose from 'mongoose';
+import { AuthRequest } from '../middleware/authMiddleware';
 
-/**
- * Task Controller - Handles all CRUD operations
- */
 export class TaskController {
 
-  static async getTasks(req: Request, res: Response): Promise<void> {
+  static async getTasks(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { category, completed } = req.query;
 
-      const filter: any = {};
+      const filter: any = { user: req.user?.id };
 
       if (category) filter.category = category;
       if (completed !== undefined) filter.completed = completed === 'true';
@@ -34,11 +32,12 @@ export class TaskController {
     }
   }
 
-  static async createTask(req: Request, res: Response): Promise<void> {
+  static async createTask(req: AuthRequest, res: Response): Promise<void> {
     try {
       const taskData = {
         ...req.body,
         dueDate: new Date(req.body.dueDate),
+        user: req.user?.id,
       };
 
       const task = new Task(taskData);
@@ -58,35 +57,9 @@ export class TaskController {
     }
   }
 
-  static async getTaskById(req: Request, res: Response): Promise<void> {
+  static async updateTask(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const id = req.params.id as string;   
-
-      if (!mongoose.Types.ObjectId.isValid(id)) {
-        res.status(400).json({ success: false, message: 'Invalid task ID' });
-        return;
-      }
-
-      const task = await Task.findById(id).select('-__v');
-
-      if (!task) {
-        res.status(404).json({ success: false, message: 'Task not found' });
-        return;
-      }
-
-      res.status(200).json({ success: true, task });
-    } catch (error: any) {
-      res.status(500).json({
-        success: false,
-        message: 'Error fetching task',
-        error: error.message,
-      });
-    }
-  }
-
-  static async updateTask(req: Request, res: Response): Promise<void> {
-    try {
-      const id = req.params.id as string;   // ← Fixed here
+      const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({ success: false, message: 'Invalid task ID' });
@@ -98,8 +71,9 @@ export class TaskController {
         updateData.dueDate = new Date(updateData.dueDate);
       }
 
-      const updatedTask = await Task.findByIdAndUpdate(
-        id,
+      // Make sure user can only update their own tasks
+      const updatedTask = await Task.findOneAndUpdate(
+        { _id: id, user: req.user?.id },
         updateData,
         { new: true, runValidators: true }
       ).select('-__v');
@@ -123,16 +97,20 @@ export class TaskController {
     }
   }
 
-  static async deleteTask(req: Request, res: Response): Promise<void> {
+  static async deleteTask(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const id = req.params.id as string;   // ← Fixed here
+      const id = req.params.id as string;
 
       if (!mongoose.Types.ObjectId.isValid(id)) {
         res.status(400).json({ success: false, message: 'Invalid task ID' });
         return;
       }
 
-      const deletedTask = await Task.findByIdAndDelete(id);
+      // Make sure user can only delete their own tasks
+      const deletedTask = await Task.findOneAndDelete({
+        _id: id,
+        user: req.user?.id,
+      });
 
       if (!deletedTask) {
         res.status(404).json({ success: false, message: 'Task not found' });
@@ -152,3 +130,29 @@ export class TaskController {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
