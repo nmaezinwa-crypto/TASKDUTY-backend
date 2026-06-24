@@ -5,11 +5,15 @@ import { AuthRequest } from '../middleware/authMiddleware';
 
 export class TaskController {
 
+  // Get all active (non-deleted) tasks
   static async getTasks(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { category, completed } = req.query;
 
-      const filter: any = { user: req.user?.id };
+      const filter: any = { 
+        user: req.user?.id,
+        deleted: false,
+      };
 
       if (category) filter.category = category;
       if (completed !== undefined) filter.completed = completed === 'true';
@@ -32,12 +36,14 @@ export class TaskController {
     }
   }
 
+  // Create a new task
   static async createTask(req: AuthRequest, res: Response): Promise<void> {
     try {
       const taskData = {
         ...req.body,
         dueDate: new Date(req.body.dueDate),
         user: req.user?.id,
+        deleted: false,
       };
 
       const task = new Task(taskData);
@@ -57,6 +63,7 @@ export class TaskController {
     }
   }
 
+  // Update a task
   static async updateTask(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = req.params.id as string;
@@ -71,9 +78,8 @@ export class TaskController {
         updateData.dueDate = new Date(updateData.dueDate);
       }
 
-      // Make sure user can only update their own tasks
       const updatedTask = await Task.findOneAndUpdate(
-        { _id: id, user: req.user?.id },
+        { _id: id, user: req.user?.id, deleted: false },
         updateData,
         { new: true, runValidators: true }
       ).select('-__v');
@@ -97,6 +103,7 @@ export class TaskController {
     }
   }
 
+  // Soft delete a task
   static async deleteTask(req: AuthRequest, res: Response): Promise<void> {
     try {
       const id = req.params.id as string;
@@ -106,11 +113,11 @@ export class TaskController {
         return;
       }
 
-      // Make sure user can only delete their own tasks
-      const deletedTask = await Task.findOneAndDelete({
-        _id: id,
-        user: req.user?.id,
-      });
+      const deletedTask = await Task.findOneAndUpdate(
+        { _id: id, user: req.user?.id, deleted: false },
+        { deleted: true, deletedAt: new Date() },
+        { new: true }
+      );
 
       if (!deletedTask) {
         res.status(404).json({ success: false, message: 'Task not found' });
@@ -119,7 +126,7 @@ export class TaskController {
 
       res.status(200).json({
         success: true,
-        message: 'Task deleted successfully',
+        message: 'Task moved to trash',
       });
     } catch (error: any) {
       res.status(500).json({
@@ -129,30 +136,97 @@ export class TaskController {
       });
     }
   }
+
+  // Get all deleted tasks (Trash)
+  static async getTrashedTasks(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const tasks = await Task.find({
+        user: req.user?.id,
+        deleted: true,
+      })
+        .sort({ deletedAt: -1 })
+        .select('-__v');
+
+      res.status(200).json({
+        success: true,
+        count: tasks.length,
+        tasks,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching trashed tasks',
+        error: error.message,
+      });
+    }
+  }
+
+  // Restore a task from trash
+  static async restoreTask(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({ success: false, message: 'Invalid task ID' });
+        return;
+      }
+
+      const restoredTask = await Task.findOneAndUpdate(
+        { _id: id, user: req.user?.id, deleted: true },
+        { deleted: false, deletedAt: null },
+        { new: true }
+      );
+
+      if (!restoredTask) {
+        res.status(404).json({ success: false, message: 'Task not found in trash' });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Task restored successfully',
+        task: restoredTask,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Error restoring task',
+        error: error.message,
+      });
+    }
+  }
+
+  // Permanently delete a task
+  static async permanentDeleteTask(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const id = req.params.id as string;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        res.status(400).json({ success: false, message: 'Invalid task ID' });
+        return;
+      }
+
+      const deletedTask = await Task.findOneAndDelete({
+        _id: id,
+        user: req.user?.id,
+        deleted: true,
+      });
+
+      if (!deletedTask) {
+        res.status(404).json({ success: false, message: 'Task not found in trash' });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Task permanently deleted',
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Error permanently deleting task',
+        error: error.message,
+      });
+    }
+  }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

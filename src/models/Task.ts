@@ -8,6 +8,8 @@ export interface ITask extends Document {
   category: 'Urgent' | 'Important' | 'Work' | 'Personal' | 'Other';
   completed: boolean;
   user: Types.ObjectId;
+  deleted: boolean;
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,6 +60,14 @@ const taskSchema = new Schema<ITask>(
       ref: 'User',
       required: [true, 'User is required'],
     },
+    deleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -66,6 +76,7 @@ const taskSchema = new Schema<ITask>(
 
 taskSchema.index({ user: 1, completed: 1, category: 1 });
 taskSchema.index({ dueDate: 1 });
+taskSchema.index({ deleted: 1 });
 
 export const Task = mongoose.model<ITask>('Task', taskSchema);
 export default Task;
